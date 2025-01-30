@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter Notebooks
+*.ipynb_checkpoints
+
+# Virtual Environment
+env/
+
+# Environment variable
+.env
+
+# Model files
+saved_model/unet_final_model.keras
+saved_model/sample_model.keras
+
+# VS Code settings
+.vscode/
+
+# ngrok folder
+ngrok_repo/
