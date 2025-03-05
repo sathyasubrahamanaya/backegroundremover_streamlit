@@ -1,44 +1,40 @@
-from fastapi import APIRouter, File, UploadFile,Response
-from fastapi.responses import StreamingResponse,FileResponse
+from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi.responses import StreamingResponse
 from io import BytesIO
 from PIL import Image
 from app.utils.image_processing import preprocess_image, postprocess_foreground
 from app.utils.model import load_trained_model
-from starlette.background import BackgroundTask
-from PIL import Image
-import os
-
-
-def cleanup():
-    os.remove('tempfile.png')
-
-# Load the model once when the app starts
-model = load_trained_model("saved_model/unet_background_removal.keras")
 
 router = APIRouter()
 
+# Load the model once when the app starts
+model = load_trained_model("saved_model/unet_background_removal.keras")
 
 @router.post("/upload")
 async def create_upload_file(files: list[UploadFile]):
     return {"filename": [file.filename for file in files]}
 
-@router.post("/remove-background/")
+@router.post("/remove_background")
 async def remove_background(file: UploadFile = File(...)):
-    # Read the uploaded image file
-    image_data = await file.read()
-    image = Image.open(BytesIO(image_data))
+    try:
+        # Read the uploaded image file and ensure it's in RGB mode
+        image_data = await file.read()
+        image = Image.open(BytesIO(image_data)).convert("RGB")
 
-    # Preprocess image for prediction
-    input_image = preprocess_image(image)
+        # Preprocess the image for prediction
+        input_image = preprocess_image(image)
 
-    # Predict background removal mask
-    mask = model.predict(input_image)
+        # Predict the background removal mask
+        mask = model.predict(input_image)
 
-    # Postprocess to extract the foreground
-    foreground_image = postprocess_foreground(image, mask)
-    foreground_image.save("tempfile.png")
+        # Postprocess to extract the foreground from the original image
+        foreground_image = postprocess_foreground(image, mask)
 
+        # Save the processed image to a BytesIO buffer
+        img_byte_arr = BytesIO()
+        foreground_image.save(img_byte_arr, format="PNG")
+        img_byte_arr.seek(0)
 
-
-
-    return FileResponse('tempfile.png', media_type="image/png",background=BackgroundTask(cleanup))
+        return StreamingResponse(img_byte_arr, media_type="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
